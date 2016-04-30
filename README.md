@@ -23,6 +23,12 @@
 docker pull websemantics/spark-docker
 ```
 
+- Or clone this repo and run,
+
+```
+docker-compose up
+```
+
 ## Includes
 
 - Nginx 1.8.1
@@ -31,23 +37,25 @@ docker pull websemantics/spark-docker
 - MySQL 5.7
 - Redis
 - NodeJS
+- Solr
 - Blackfire
 - Bower
 - Gulp
 - Composer
 - Laravel Envoy
 - Laravel Installer
+- Spark Installer
 
 
 ## Environment Variables
 
 | Tables        | Are           |
 | ------------- |:-------------:|
-| APP_NAME      | The default value is app but you can pass whatever you'd like the name of your application to be. setting this parameter will take care of the nginx server block, it will create a database as well as any other configuration necessary to run your application. If you set this variable, make sure to use your new value in place of app any where you come across it in the instructions! |
-| APP_DOMAIN      |       |
-| APP_EMAIL |       |
+| APP_NAME      | app |
+| APP_DOMAIN      |   spark.dev    |
+| APP_EMAIL | spark@websemantics.ca      |
 | DB_DATABASE      | spark |
-| DB_USERNAME      | root      |
+| DB_USERNAME      | spark      |
 | DB_PASSWORD | secret      |
 
 
@@ -59,17 +67,23 @@ docker pull websemantics/spark-docker
 | 443	| Port 443 is open to allow standard HTTPS traffic.|
 | 3306	| Port 3306 is open to allow MySQL traffic.|
 | 6379	| Port 6379 is open to allow Redis traffic.|
+| 8983	| Port 8983 is open to allow Solr traffic.|
 
 
 ## Volumes
 
 | Volume        | Description           |
 | ------------- |:-------------:|
-| `/var/www/html/app`	| This is the volume that stores your application. If you set your APP_NAME environment variable when starting this container, you will need to use your custom value in place of app in this volume. Example - If your `APP_NAME` is set to acme, your volume will be `/var/www/html/acme`.|
-| `/var/cache/nginx`	| If you need access to the Nginx cache, this is the volume you are looking for.|
-| `/var/log/nginx`	| Nginx acting up? You can check the logs by hooking into this volume |
-| `/var/log/supervisor`	| If your application is still not working like it should and your sure you didn't leave out a semi-colon at some point, then you can always check out the supervisord logs. It may also be a good idea to send us anything you find here so we can update the container (if necessary).|
+| `/var/www/html/app`	| This is the volume that stores your application.|
+| `/var/cache/nginx`	| The volume to access Nginx cache.|
+| `/var/log/nginx`	| Nginx logs stored in this volume |
+| `/var/log/supervisor`	| The volume to access supervisord logs.|
+| `/var/lib/mysql`	| Access to mysql from this volume.|
+| `/var/lib/solr`	| Access to Solr from this volume.|
+
 
 ## Credits
 
-This Docker layout is based on https://github.com/laraedit/laraedit-docker
+- This Docker layout is based on https://github.com/laraedit/laraedit-docker.
+- Work to install Solar was based on  https://github.com/twinbit/docker-drupal-solr.
+- Files in `solr` folder are from https://github.com/composer/packagist 

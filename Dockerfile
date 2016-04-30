@@ -3,13 +3,26 @@ MAINTAINER Derek Bourgeois <derek@ibourgeois.com>
 
 # set some environment variables
 ENV APP_NAME app
-ENV APP_EMAIL app@laraedit.com
-ENV APP_DOMAIN app.dev
+ENV APP_EMAIL spark@websemantics.ca
+ENV APP_DOMAIN spark.dev
 ENV DEBIAN_FRONTEND noninteractive
+ENV SOLR_VERSION 4.10.2
+ENV SOLR solr-$SOLR_VERSION
 
 # upgrade the container
 RUN apt-get update && \
     apt-get upgrade -y
+
+# install java and wget
+RUN apt-get update && \
+    apt-get install -y \
+    curl \
+    openjdk-7-jre-headless \
+    unzip \
+    wget \
+    lsof \
+    curl \
+    procps
 
 # install some prerequisites
 RUN apt-get install -y software-properties-common curl build-essential \
@@ -34,16 +47,16 @@ RUN apt-add-repository ppa:nginx/stable -y && \
 RUN echo "LC_ALL=en_US.UTF-8" >> /etc/default/locale  && \
     locale-gen en_US.UTF-8  && \
     ln -sf /usr/share/zoneinfo/UTC /etc/localtime
-    
+
 # setup bash
-COPY .bash_aliases /root
+COPY src/.bash_aliases /root
 
 # install nginx
 RUN apt-get install -y --force-yes nginx
-COPY homestead /etc/nginx/sites-available/
+COPY src/default.vhost /etc/nginx/sites-available/
 RUN rm -rf /etc/nginx/sites-available/default && \
     rm -rf /etc/nginx/sites-enabled/default && \
-    ln -fs "/etc/nginx/sites-available/homestead" "/etc/nginx/sites-enabled/homestead" && \
+    ln -fs "/etc/nginx/sites-available/default.vhost" "/etc/nginx/sites-enabled/default.vhost" && \
     sed -i -e"s/keepalive_timeout\s*65/keepalive_timeout 2/" /etc/nginx/nginx.conf && \
     sed -i -e"s/keepalive_timeout 2/keepalive_timeout 2;\n\tclient_max_body_size 100m/" /etc/nginx/nginx.conf && \
     echo "daemon off;" >> /etc/nginx/nginx.conf && \
@@ -76,14 +89,14 @@ RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/7.0/cli/ph
     sed -i -e "s/pm.max_requests = 500/pm.max_requests = 200/g" /etc/php/7.0/fpm/pool.d/www.conf && \
     sed -i -e "s/;listen.mode = 0660/listen.mode = 0750/g" /etc/php/7.0/fpm/pool.d/www.conf && \
     find /etc/php/7.0/cli/conf.d/ -name "*.ini" -exec sed -i -re 's/^(\s*)#(.*)/\1;\2/g' {} \;
-COPY fastcgi_params /etc/nginx/
+COPY src/fastcgi_params /etc/nginx/
 RUN phpenmod mcrypt && \
     mkdir -p /run/php/ && chown -Rf www-data.www-data /run/php
 
-# install sqlite 
+# install sqlite
 RUN apt-get install -y sqlite3 libsqlite3-dev
 
-# install mysql 
+# install mysql
 RUN echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set-selections;\
     echo mysql-server mysql-server/root_password_again password $DB_PASS | debconf-set-selections;\
     apt-get install -y mysql-server && \
@@ -91,14 +104,33 @@ RUN echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set
     sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf
 RUN /usr/sbin/mysqld & \
     sleep 10s && \
-    echo "GRANT ALL ON *.* TO root@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; CREATE USER 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret'; GRANT ALL ON *.* TO 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; GRANT ALL ON *.* TO 'homestead'@'%' IDENTIFIED BY 'secret' WITH GRANT OPTION; FLUSH PRIVILEGES; CREATE DATABASE homestead;" | mysql
+    echo "GRANT ALL ON *.* TO root@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; CREATE USER 'spark'@'0.0.0.0' IDENTIFIED BY 'secret'; GRANT ALL ON *.* TO 'spark'@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; GRANT ALL ON *.* TO 'spark'@'%' IDENTIFIED BY 'secret' WITH GRANT OPTION; FLUSH PRIVILEGES; CREATE DATABASE spark;" | mysql
 VOLUME ["/var/lib/mysql"]
 
 # install composer
 RUN curl -sS https://getcomposer.org/installer | php && \
     mv composer.phar /usr/local/bin/composer && \
     printf "\nPATH=\"~/.composer/vendor/bin:\$PATH\"\n" | tee -a ~/.bashrc
-    
+
+# install solr
+
+# download and install solr
+WORKDIR /tmp
+RUN mkdir -p /opt && \
+    wget --progress=bar:force --output-document=/opt/$SOLR.tgz http://archive.apache.org/dist/lucene/solr/$SOLR_VERSION/$SOLR.tgz && \
+    tar -C /opt --extract --file /opt/$SOLR.tgz && \
+    rm /opt/$SOLR.tgz && \
+    ln -s /opt/$SOLR /opt/solr
+
+# Copy solr configuration
+COPY solr/* /opt/solr/example/solr/collection1/conf/
+
+WORKDIR /opt/solr/example
+ENTRYPOINT ["java"]
+CMD ["-Xmx512m", "-DSTOP.PORT=8079", "-DSTOP.KEY=stopkey", "-jar", "start.jar"]
+
+VOLUME ["/var/lib/solr"]
+
 # install prestissimo
 # RUN composer global require "hirak/prestissimo"
 
@@ -107,6 +139,9 @@ RUN composer global require "laravel/envoy"
 
 #install laravel installer
 RUN composer global require "laravel/installer"
+
+#install spark installer
+RUN composer global require "laravel/spark-installer"
 
 # install nodejs
 RUN apt-get install -y nodejs
@@ -117,7 +152,7 @@ RUN /usr/bin/npm install -g gulp
 # install bower
 RUN /usr/bin/npm install -g bower
 
-# install redis 
+# install redis
 RUN apt-get install -y redis-server
 
 # install blackfire
@@ -126,7 +161,7 @@ RUN apt-get install -y blackfire-agent blackfire-php
 # install supervisor
 RUN apt-get install -y supervisor && \
     mkdir -p /var/log/supervisor
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 VOLUME ["/var/log/supervisor"]
 
 # clean up our mess
@@ -140,7 +175,7 @@ RUN apt-get remove --purge -y software-properties-common && \
     rm -rf /usr/share/man/??_*
 
 # expose ports
-EXPOSE 80 443 3306 6379
+EXPOSE 80 443 3306 6379 8983
 
 # set container entrypoints
 ENTRYPOINT ["/bin/bash","-c"]

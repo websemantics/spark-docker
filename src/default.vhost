@@ -1,7 +1,7 @@
 server {
     listen 80 default_server;
 
-    server_name app.dev;
+    server_name spark.dev;
     root /var/www/html/app/public;
     index index.html index.htm index.php;
     charset utf-8;
@@ -29,7 +29,7 @@ server {
         fastcgi_buffers 4 16k;
         fastcgi_connect_timeout 300;
         fastcgi_send_timeout 300;
-        fastcgi_read_timeout 300;
+        fastcgi_read_timeout 1800;
     }
 
     location ~ /\.ht {
